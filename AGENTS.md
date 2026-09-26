@@ -2,93 +2,136 @@
 
 ## What This Is
 
-A single-file Python CLI tool (`Onlinetrial.py`) that **extracts handwritten water-treatment log-book data from photos into Excel** using OpenRouter's vision models. Entirely self-contained — no framework, no build system.
+A Python CLI package (`logbook_parser/`) that **extracts handwritten water-treatment log-book data from photos into Excel** using vision models. Provider-agnostic: OpenRouter by default, with a local OpenAI-compatible backend.
 
 ## How It Works (End-to-End)
 
-1. **Photo → JSON** (via OpenRouter vision API): sends a photo + a Spanish-language prompt to a vision model, gets back structured JSON with rows of data.
-2. **JSON → Normalized rows**: typed coercion, date/time parsing, range validation, provenance metadata.
-3. **Rows → Excel workbook**: appended to `plant.xlsx` with three sheets: main data, `REVIEW_QUEUE` (flagged rows), and `SCHEMA_MAP` (column mapping reference). Flagged cells are highlighted red.
+1. **Photo → JSON** (via a vision provider): sends a photo + a Spanish-language prompt to a vision model, gets back structured JSON with rows of data.
+2. **JSON → Normalized rows**: typed coercion, date/time parsing, range validation, provenance metadata (`logbook_parser/normalize.py`).
+3. **Rows → Excel workbook**: appended to `plant.xlsx` with three sheets: main data, `REVIEW_QUEUE` (flagged rows), and `SCHEMA_MAP` (column mapping reference). Flagged cells are highlighted red (`logbook_parser/workbook.py`).
 
 ## Essential Commands
 
 ```bash
 # Live extraction from photos
 export OPENROUTER_API_KEY="sk-or-..."
-python Onlinetrial.py --plant san_juan_planes --photos /path/to/photos --out plant.xlsx
+uv run logbook-parser --plant san_juan_planes --photos /path/to/photos --out plant.xlsx
 
 # Dry-run from pre-extracted JSON (for debugging or re-running normalization)
-python Onlinetrial.py --plant san_juan_planes --from-json "extractions/*.json" --out plant.xlsx
+uv run logbook-parser --plant san_juan_planes --from-json "extractions/*.json" --out plant.xlsx
 
 # Force re-extraction even if photos already in the output file
-python Onlinetrial.py --plant san_juan_planes --photos /path/to/photos --out plant.xlsx --reprocess
+uv run logbook-parser --plant san_juan_planes --photos /path/to/photos --out plant.xlsx --reprocess
 
 # Use a different model (Gemini is better for tough handwriting)
-python Onlinetrial.py --plant san_juan_planes --photos /path/to/photos --model google/gemini-2.5-flash
+uv run logbook-parser --plant san_juan_planes --photos /path/to/photos --model google/gemini-2.5-flash
 
 # Control parallelism (free tier: keep workers low, e.g. 2)
-python Onlinetrial.py --plant san_juan_planes --photos /path/to/photos --workers 2
+uv run logbook-parser --plant san_juan_planes --photos /path/to/photos --workers 2
+
+# Local OpenAI-compatible server (llama.cpp / vLLM / Ollama)
+uv run logbook-parser --plant san_juan_planes --photos /path/to/photos \
+  --provider local --base-url http://localhost:11434/v1 --model llava
+
+# Equivalent module invocation
+uv run python -m logbook_parser --plant san_juan_planes --photos /path/to/photos
 ```
 
 ## Project Config
 
 - **Package manager**: `uv` (the `uv.lock` file is present, no `requirements.txt`).
-- **pyproject.toml** declares `requires-python = ">=3.14"`, dependencies: `ollama>=0.4`, `openai>=3.8.0`, `openpyxl>=3.1`, `pandas>=2.0`.
-- **Known dep gap**: `ollama` is listed but never imported in the code. `pillow` (PIL) is used at runtime for HEIC→JPEG conversion but is NOT listed in `pyproject.toml` — it's only mentioned in the `RuntimeError` error message. If you extend the tool, decide whether to add it or remove `ollama`.
+- **pyproject.toml** declares `requires-python = ">=3.14"`; dependencies: `openai>=3.8.0`, `openpyxl>=3.1`, `pandas>=2.0`, `pillow>=10.0`, `pillow-heif>=0.16`. Entry point: `logbook-parser = "logbook_parser.cli:main"`.
+- **`ollama` is intentionally NOT a dependency** — the local backend uses the generic OpenAI-compatible HTTP path instead. A native Ollama provider could be added later under `vision/`.
 
 ## Environment Variables
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `OPENROUTER_API_KEY` | *(required)* | OpenRouter API key (stored in `.env`) |
-| `OPENROUTER_VISION_MODEL` | `nvidia/nemotron-nano-12b-v2-vl:free` | Vision model slug |
+| `OPENROUTER_API_KEY` | *(required for `--provider openrouter`)* | OpenRouter API key |
+| `OPENROUTER_VISION_MODEL` | `google/gemma-4-31b-it:free` | Default vision model slug |
 | `LOGBOOK_WORKERS` | `3` | Parallel photo threads |
 
-## Code Organization (Single File, 483 Lines)
+Env is read by `logbook_parser/config.py` (`default_model()` / `default_workers()`) and in `vision/openrouter.py`, never at import time.
 
-- **Section 1** (lines 14-84): Canonical schema, `Field` dataclass, `PlantConfig`, per-plant column mappings. Only one plant (`san_juan_planes`) is defined.
-- **Section 2** (lines 86-185): `normalize_extraction()` — raw JSON → typed canonical rows with validation, date carry-down, time normalization.
-- **Section 3** (lines 188-324): `extract_photo()` — OpenRouter API call with retry/backoff, image encoding (HEIC → JPEG auto-conversion), prompt building.
-- **Section 4** (lines 327-382): `write_workbook()` — Excel output with red highlighting for flagged cells.
-- **Section 5** (lines 385-483): CLI `main()` — argparse, dispatch, dedup, concat.
+## Code Organization
+
+```
+logbook_parser/
+  __init__.py         version
+  __main__.py         `python -m logbook_parser`
+  schema.py           Field, CANONICAL_SCHEMA, PROVENANCE_FIELDS, ALL_COLS, FIELD_BY_KEY
+  plants.py           PlantConfig, SAN_JUAN_PLANES, PLANTS
+  normalize.py        coerce, parse_date, to_24h, normalize_extraction
+  json_utils.py       parse_json (think-trace / fence stripping)
+  config.py           Settings dataclass + env-backed defaults
+  vision/
+    __init__.py       extract_photo(), get_provider()
+    base.py           EncodedImage, VisionProvider protocol, ExtractionError
+    images.py         image_data_url, MIME map, HEIC->JPEG
+    prompts.py        build_prompt(plant)
+    openai_compat.py  OpenAICompatibleProvider + retry/backoff, extract_json
+    openrouter.py     OpenRouter preset
+    local.py          local OpenAI-compatible preset
+  workbook.py         load_existing, schema_map_df, write_workbook + red styling
+  pipeline.py         rows_from_json, rows_from_photos, merge_rows
+  cli.py              build_parser(), main()
+```
+
+- **schema.py / plants.py** — pure data, no I/O, no project imports.
+- **normalize.py / json_utils.py** — pure functions (the main unit-test surface).
+- **config.py** — frozen `Settings`; env read inside functions so callers can inject settings.
+- **vision/base.py** — `EncodedImage` (path + optional data_url) and the `VisionProvider` protocol. `extract_photo()` in `vision/__init__.py` owns prompt building, JSON parsing, and `_model` tagging, so all providers behave identically.
+- **vision/openai_compat.py** — the shared transport/retry; OpenRouter and local are just presets.
 
 ## Threading
 
-- **Single shared client**: `_make_client()` (line 198) creates one `OpenAI` instance. That single client is built in `_rows_from_photos()` (line 411) and passed as `client=` to every `extract_photo()` call — no thread-local storage, no per-thread clients.
-- **`ThreadPoolExecutor`** with `as_completed` for progress reporting. All result aggregation happens in the main thread (no races on the `rows` list).
-- **No rate limiting**: There is no semaphore or lock throttling concurrent API calls. Workers run at full configured parallelism, which can trigger 429s on the free tier.
-- **Retry backoff**: `min(2 ** attempt, 30)` — exponential backoff (1, 2, 4, 8, 16, 30s...) with no jitter. Retryable errors are matched by substring against `_RETRYABLE` (line 290).
+- **Single shared provider**: `rows_from_photos()` (`pipeline.py`) calls `get_provider(settings)` once and passes it to every `extract_photo()` call — no thread-local storage.
+- **`ThreadPoolExecutor`** with `as_completed` for progress reporting. All result aggregation happens in the main thread.
+- **No rate limiting**: no semaphore or lock throttling concurrent API calls; full configured parallelism can trigger 429s on the free tier.
+- **Retry backoff**: `min(2 ** attempt, 30)` — no jitter. Retryable errors are matched by substring against `RETRYABLE` in `vision/openai_compat.py`.
 
 ## Key Patterns & Conventions
 
-- **No type annotations on `__init__`** — uses `@dataclass` for `Field` and `PlantConfig`.
-- **One lazy import** — `openai` is imported inside `_make_client()` so dry-run mode (`--from-json`) doesn't need it installed.
-- **Error handling**: retry loop for transient HTTP errors (429, 502, 503, timeouts). Non-retryable errors propagate immediately.
-- **Date carry-down**: if a row has no date, the tool carries the last-seen date forward — a common pattern in handwritten log transcription.
-- **Time normalization**: `_to_24h()` handles bare numbers (e.g., `7` → `19:00`), `am`/`pm` suffixes, and HH:MM formats. The `bare_time_rule` configures behavior for ambiguous bare numbers ("daytime" assumes 7-11 AM, 12 PM, 1-6 PM).
-- **JSON parsing**: strips `  ...  ` reasoning traces and markdown code fences before parsing.
-- **Excel**: uses `openpyxl` (not xlsxwriter) — needed for cell-level formatting (red fill on review cells).
-- **Dedup**: `drop_duplicates(subset=["source_image", "record_date", "record_time", "operator"], keep="last")` — prevents duplicate rows from repeated extraction of the same photo.
+- **`@dataclass`** for `Field`, `PlantConfig`, `Settings`, `EncodedImage`; no type annotations on `__init__`.
+- **Lazy `openai` import** — inside `OpenAICompatibleProvider._client_instance()` so dry-run mode (`--from-json`) doesn't need it installed.
+- **Date carry-down**: if a row has no date, the last-seen date is carried forward.
+- **Time normalization**: `to_24h()` handles bare numbers (e.g., `7` → `19:00`), `am`/`pm` suffixes, and HH:MM. `bare_time_rule` configures bare-number behavior ("daytime" assumes 7-11 AM, 12 PM, 1-6 PM).
+- **Excel**: uses `openpyxl` for cell-level formatting (red fill on review cells).
+- **Dedup**: `drop_duplicates(subset=["source_image", "record_date", "record_time", "operator"], keep="last")` in `pipeline.merge_rows()`.
 
 ## Gotchas & Non-Obvious Details
 
-- **The prompt is Spanish** — the tool was built for a Honduran water utility. All column names are in Spanish.
-- **HEIC photos** are auto-converted to JPEG in-memory via `pillow-heif`. If that library is not installed, HEIC files raise an error with installation instructions.
-- **Nemotron's reasoning trace** is explicitly disabled via `extra_body={"reasoning": {"enabled": False}}` — this is model-specific and may not work on other models.
-- **The `_RETRYABLE` tuple** is a substring match on the lowercased error string — very loose matching. This is intentional for the flaky free-tier OpenRouter models.
-- **`max_retries`** defaults to 5 but there is no `--retries` CLI flag — it's hardcoded in `extract_photo()`.
-- **Only one plant defined** (`san_juan_planes`). Adding a new plant means creating a `PlantConfig` with a column mapping and adding it to the `PLANTS` dict.
-- **The output filename** defaults to `plant.xlsx` but can be overridden with `--out`. The tool **appends** to existing files (reads existing rows, merges, deduplicates, re-writes the whole workbook).
+- **The prompt is Spanish** — built for a Honduran water utility. All column names are in Spanish.
+- **HEIC photos** are auto-converted to JPEG in-memory via `pillow-heif`; missing library raises an install-instructions error.
+- **Nemotron's reasoning trace** is disabled via `extra_body={"reasoning": {"enabled": False}}` in the OpenRouter preset only — model-specific.
+- **The `RETRYABLE` tuple** is a loose substring match on the lowercased error string, intentional for flaky free-tier models.
+- **`max_retries`** lives on `Settings` (default 5) and is passed to the provider; there is no `--retries` CLI flag yet.
+- **Only one plant defined** (`san_juan_planes`). Adding one means creating a `PlantConfig` in `plants.py` and registering it in `PLANTS`.
+- **The output file** defaults to `plant.xlsx`, overridable with `--out`; the tool **appends** (reads, merges, dedups, rewrites).
 - **`write_workbook` sorts** by `record_date` then `record_time_24h` before writing.
-- **`--from-json` expects** JSON files with a `rows` key (OpenRouter response format). The `_source_image` key is read from the JSON, not from the filename.
-- **No test suite**, no CI, no linting config — this is a production script, not a library project.
+- **`--from-json` expects** JSON files with a `rows` key. `_source_image` is read from the JSON, not the filename.
+- **`--provider local` requires `--base-url`** and needs no API key.
+- **No test suite**, no CI, no linting config.
 
 ## Dependencies
 
 ```bash
-uv add openai openpyxl pandas
-# Optional: for HEIC photo support
-uv add pillow pillow-heif
+uv add openai openpyxl pandas pillow pillow-heif
 ```
 
-`ollama` is in `pyproject.toml` but unused in the code — consider removing it if you clean up.
+## Adding a Local Backend
+
+Implement the `VisionProvider` protocol (`vision/base.py`) — return raw model text from `complete()` — then wire it into `get_provider()` in `vision/__init__.py` and add a `--provider` choice. For OpenAI-compatible servers, just point the `local` preset at a different `--base-url`.
+
+## Git Commits
+
+- **Only commit when explicitly asked.** Never commit on your own initiative.
+- **Subject line**: short, imperative, matching existing repo style (e.g. `Refactor single-file script into modular package`).
+- **Body**: use bullet points to explain what changed and why, one change per bullet. Group related edits into a single bullet; mention removed files and renamed/moved modules.
+- **AI attribution trailer**: end every AI-assisted commit message with a trailer naming the model that did the work:
+  ```
+  AI-Assisted-By: <provider>/<model-id>
+  ```
+  Example: `AI-Assisted-By: hyper/deepseek-v4.1-flash`.
+- **Before staging**: run `git status`, `git diff`, and `git diff --cached`; stage only intended files.
+- **Never commit secrets**: `.env` is excluded via `.git/info/exclude`; do not add it. Leave stray build/output artifacts (e.g. `test.xlsx`) out of commits.
