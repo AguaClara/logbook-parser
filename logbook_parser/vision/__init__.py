@@ -12,6 +12,7 @@ __all__ = [
     "ExtractionError",
     "VisionProvider",
     "OpenAICompatibleProvider",
+    "build_prompt",
     "extract_photo",
     "get_provider",
 ]
@@ -25,7 +26,9 @@ def get_provider(settings) -> VisionProvider:
     raise ValueError(f"Unknown provider '{settings.provider}'. Use 'openrouter' or 'local'.")
 
 
-def extract_photo(path: str, plant, provider: VisionProvider, model: str) -> Dict:
-    """Extract one photo into raw JSON via the given provider."""
-    prompt = build_prompt(plant)
+def extract_photo(path: str, provider: VisionProvider, prompt: str, model: str) -> Dict:
+    """Extract one photo into raw JSON via the given provider.
+
+    The prompt is built once by the caller and reused across photos.
+    """
     return extract_json(provider, EncodedImage(path=path), prompt, model)

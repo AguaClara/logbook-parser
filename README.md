@@ -33,9 +33,6 @@ uv run python -m logbook_parser --plant san_juan_planes --photos ./photos --out 
 ## Usage
 
 ```bash
-# Set workers to 2-3 on the free tier to avoid rate limits
-logbook-parser --plant san_juan_planes --photos ./photos --workers 2
-
 # Use a stronger model for tough handwriting
 logbook-parser --plant san_juan_planes --photos ./photos --model google/gemini-2.5-flash
 
@@ -74,7 +71,6 @@ Only one plant is currently defined: `san_juan_planes`. Adding a new plant means
 |---|---|---|
 | `OPENROUTER_API_KEY` | required for `--provider openrouter` | OpenRouter API key |
 | `OPENROUTER_VISION_MODEL` | `google/gemma-4-31b-it:free` | Default vision model slug |
-| `LOGBOOK_WORKERS` | `3` | Parallel requests |
 
 ## Package Layout
 
@@ -108,5 +104,6 @@ uv add openai openpyxl pandas pillow pillow-heif
 Any backend that implements the `VisionProvider` protocol in
 `logbook_parser/vision/base.py` can be selected by extending
 `get_provider()` in `logbook_parser/vision/__init__.py`. The shared
-`extract_photo()` orchestration handles prompt building, JSON parsing, and
-model tagging, so new providers only need to return raw model text.
+`extract_photo()` orchestration handles image encoding, JSON parsing, and
+model tagging, so new providers only need to return raw model text. The
+prompt is built once per run by the pipeline and reused for every photo.

@@ -3,15 +3,15 @@
 import argparse
 import sys
 
-from .config import Settings, default_model, default_workers
+from .config import Settings, default_model
 from .pipeline import merge_rows, rows_from_json, rows_from_photos
 from .plants import PLANTS
+from .vision import get_provider
 from .workbook import load_existing, write_workbook
 
 
 def build_parser() -> argparse.ArgumentParser:
     model_default = default_model()
-    workers_default = default_workers()
     ap = argparse.ArgumentParser(description="Water log-book photos -> Excel.")
     ap.add_argument("--plant", required=True, choices=list(PLANTS))
     ap.add_argument("--photos", help="folder of photos (live extraction)")
@@ -27,8 +27,6 @@ def build_parser() -> argparse.ArgumentParser:
                          "(e.g. http://localhost:11434/v1)")
     ap.add_argument("--api-key", default=None,
                     help="optional API key for --provider local")
-    ap.add_argument("--workers", type=int, default=workers_default,
-                    help=f"parallel requests (default: {workers_default}; keep low on the free tier)")
     ap.add_argument("--reprocess", action="store_true", help="re-extract even if already in file")
     return ap
 
@@ -43,7 +41,6 @@ def main(argv=None) -> int:
         out=args.out,
         provider=args.provider,
         model=args.model,
-        workers=args.workers,
         base_url=args.base_url,
         api_key=args.api_key,
         reprocess=args.reprocess,
@@ -58,7 +55,8 @@ def main(argv=None) -> int:
         new = [r for r in rows_from_json(plant, args.from_json)
                if args.reprocess or r["source_image"] not in done]
     elif args.photos:
-        new = rows_from_photos(plant, args.photos, done, settings)
+        provider = get_provider(settings)
+        new = rows_from_photos(plant, args.photos, done, settings, provider)
     else:
         parser.error("provide --photos (live) or --from-json (dry run)")
 

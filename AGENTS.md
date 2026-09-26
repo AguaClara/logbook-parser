@@ -26,9 +26,6 @@ uv run logbook-parser --plant san_juan_planes --photos /path/to/photos --out pla
 # Use a different model (Gemini is better for tough handwriting)
 uv run logbook-parser --plant san_juan_planes --photos /path/to/photos --model google/gemini-2.5-flash
 
-# Control parallelism (free tier: keep workers low, e.g. 2)
-uv run logbook-parser --plant san_juan_planes --photos /path/to/photos --workers 2
-
 # Local OpenAI-compatible server (llama.cpp / vLLM / Ollama)
 uv run logbook-parser --plant san_juan_planes --photos /path/to/photos \
   --provider local --base-url http://localhost:11434/v1 --model llava
@@ -49,9 +46,8 @@ uv run python -m logbook_parser --plant san_juan_planes --photos /path/to/photos
 |---|---|---|
 | `OPENROUTER_API_KEY` | *(required for `--provider openrouter`)* | OpenRouter API key |
 | `OPENROUTER_VISION_MODEL` | `google/gemma-4-31b-it:free` | Default vision model slug |
-| `LOGBOOK_WORKERS` | `3` | Parallel photo threads |
 
-Env is read by `logbook_parser/config.py` (`default_model()` / `default_workers()`) and in `vision/openrouter.py`, never at import time.
+Env is read by `logbook_parser/config.py` (`default_model()`) and in `vision/openrouter.py`, never at import time.
 
 ## Code Organization
 
@@ -73,21 +69,22 @@ logbook_parser/
     openrouter.py     OpenRouter preset
     local.py          local OpenAI-compatible preset
   workbook.py         load_existing, schema_map_df, write_workbook + red styling
-  pipeline.py         rows_from_json, rows_from_photos, merge_rows
+  pipeline.py         process_photo, rows_from_json, rows_from_photos, merge_rows
   cli.py              build_parser(), main()
 ```
 
 - **schema.py / plants.py** — pure data, no I/O, no project imports.
 - **normalize.py / json_utils.py** — pure functions (the main unit-test surface).
 - **config.py** — frozen `Settings`; env read inside functions so callers can inject settings.
-- **vision/base.py** — `EncodedImage` (path + optional data_url) and the `VisionProvider` protocol. `extract_photo()` in `vision/__init__.py` owns prompt building, JSON parsing, and `_model` tagging, so all providers behave identically.
+- **vision/base.py** — `EncodedImage` (path + optional data_url) and the `VisionProvider` protocol. `extract_photo()` in `vision/__init__.py` handles image encoding, JSON parsing, and `_model` tagging, so all providers behave identically. The prompt is built once per run by `pipeline.rows_from_photos()` and passed in.
 - **vision/openai_compat.py** — the shared transport/retry; OpenRouter and local are just presets.
 
-## Threading
+## Extraction Loop
 
-- **Single shared provider**: `rows_from_photos()` (`pipeline.py`) calls `get_provider(settings)` once and passes it to every `extract_photo()` call — no thread-local storage.
-- **`ThreadPoolExecutor`** with `as_completed` for progress reporting. All result aggregation happens in the main thread.
-- **No rate limiting**: no semaphore or lock throttling concurrent API calls; full configured parallelism can trigger 429s on the free tier.
+- **Sequential**: `rows_from_photos()` (`pipeline.py`) iterates photos in a simple `for` loop, one at a time. There is no thread pool and no `--workers` flag.
+- **Single shared provider**: the CLI builds the provider once via `get_provider(settings)` and injects it into `rows_from_photos(plant, photos_dir, done, settings, provider)`. Injecting the provider is the test seam (pass a stub to run offline).
+- **`process_photo(path, plant, provider, prompt, model)`** — extracts and normalizes one photo and raises on failure.
+- **Continue-on-error**: the loop catches per-photo exceptions, prints `FAILED ... -> <provider error>`, increments the failure count, and moves on.
 - **Retry backoff**: `min(2 ** attempt, 30)` — no jitter. Retryable errors are matched by substring against `RETRYABLE` in `vision/openai_compat.py`.
 
 ## Key Patterns & Conventions
