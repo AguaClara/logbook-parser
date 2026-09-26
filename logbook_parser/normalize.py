@@ -42,6 +42,8 @@ def to_24h(raw, bare_rule="daytime"):
     m = re.match(r"^(\d{1,2})(?::(\d{2}))?(am|pm)$", s)
     if m:
         h, mins, ap = int(m.group(1)), int(m.group(2) or 0), m.group(3)
+        if not 1 <= h <= 12 or not 0 <= mins <= 59:
+            return None, False
         if ap == "am":
             h = 0 if h == 12 else h
         else:
@@ -50,6 +52,8 @@ def to_24h(raw, bare_rule="daytime"):
     m = re.match(r"^(\d{1,2})(?::(\d{2}))?$", s)
     if m:
         h, mins = int(m.group(1)), int(m.group(2) or 0)
+        if not 0 <= h <= 23 or not 0 <= mins <= 59:
+            return None, False
         if bare_rule == "all_am":
             h = 0 if h == 12 else h
         elif bare_rule == "all_pm":
@@ -67,10 +71,16 @@ def normalize_extraction(raw: Dict, plant: PlantConfig, source_image: str) -> li
     model = raw.get("_model", "")
     last_date = None
 
-    for r in raw.get("rows", []):
+    for r in (raw.get("rows") or []):
         out = {k: None for k in CANONICAL_KEYS}
         out["plant"] = plant.name
-        review = list(r.get("uncertain_fields", []))
+        raw_uncertain = r.get("uncertain_fields")
+        if isinstance(raw_uncertain, str):
+            review = [raw_uncertain]
+        elif isinstance(raw_uncertain, (list, tuple)):
+            review = [str(x) for x in raw_uncertain]
+        else:
+            review = []
 
         for fld in FIELD_BY_KEY.values():
             if fld.key in ("plant", "record_time_24h"):
@@ -87,7 +97,10 @@ def normalize_extraction(raw: Dict, plant: PlantConfig, source_image: str) -> li
             else:
                 coerced = coerce(val, fld.dtype)
                 out[fld.key] = coerced
-                if fld.valid and isinstance(coerced, (int, float)):
+                if (val not in (None, "") and fld.dtype in ("float", "int")
+                        and not isinstance(coerced, (int, float))):
+                    review.append(f"{fld.key}(unparsed)")
+                elif fld.valid and isinstance(coerced, (int, float)):
                     lo, hi = fld.valid
                     if not (lo <= coerced <= hi):
                         review.append(f"{fld.key}(out_of_range)")

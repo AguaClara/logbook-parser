@@ -73,5 +73,9 @@ def merge_rows(existing, new, reprocess):
     new_df = pd.DataFrame(new, columns=ALL_COLS)
     if reprocess and not new_df.empty:
         existing = existing[~existing["source_image"].isin(new_df["source_image"].unique())]
-    return pd.concat([existing, new_df], ignore_index=True).drop_duplicates(
+    combined = pd.concat([existing, new_df], ignore_index=True)
+    # existing rows come back from Excel as Timestamp while normalize yields
+    # datetime.date; unify before dedup/sort so the mixed object column is orderable
+    combined["record_date"] = pd.to_datetime(combined["record_date"], errors="coerce")
+    return combined.drop_duplicates(
         subset=["source_image", "record_date", "record_time", "operator"], keep="last")

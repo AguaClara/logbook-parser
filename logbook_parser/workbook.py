@@ -1,6 +1,7 @@
 """Excel output: append rows, flag review cells in red."""
 
 import os
+import re
 
 import pandas as pd
 from openpyxl import load_workbook
@@ -34,7 +35,10 @@ def schema_map_df():
 
 
 def flagged_fields(notes):
-    return {k for k in CANONICAL_KEYS if isinstance(notes, str) and k in notes}
+    if not isinstance(notes, str):
+        return set()
+    # word boundaries so `record_time` doesn't match inside `record_time_24h`
+    return {k for k in CANONICAL_KEYS if re.search(rf"(?<!\w){re.escape(k)}(?!\w)", notes)}
 
 
 def write_workbook(df, path, plant_name):
