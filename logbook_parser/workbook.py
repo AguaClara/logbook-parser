@@ -44,7 +44,7 @@ def flagged_fields(notes):
 def write_workbook(df, path, plant_name):
     df = df.reindex(columns=ALL_COLS)
     if not df.empty:
-        df = df.sort_values(["record_date", "record_time_24h"],
+        df = df.sort_values(["record_date_parsed", "record_time_24h"],
                             na_position="last").reset_index(drop=True)
     review = df[df["needs_review"] == True].copy()  # noqa: E712
     sheet = plant_name[:31] or "PLANT"

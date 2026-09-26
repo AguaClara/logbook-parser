@@ -15,7 +15,8 @@ class Field:
 
 CANONICAL_SCHEMA = [
     Field("plant",                   "Planta",                      "",     "str"),
-    Field("record_date",             "Fecha",                       "",     "date"),
+    Field("record_date",             "Fecha (as written)",          "",     "str"),
+    Field("record_date_parsed",      "Fecha (parsed)",              "",     "date"),
     Field("record_time",             "Hora (as written)",           "",     "str"),
     Field("record_time_24h",         "Hora (24h normalized)",       "",     "time"),
     Field("operator",                "Nombre",                      "",     "str"),

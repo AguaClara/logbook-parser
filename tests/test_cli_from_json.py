@@ -17,7 +17,7 @@ SCHEMA_SHEET = "SCHEMA_MAP"
 
 def row(**overrides):
     base = {
-        "raw_date": "07/01/26",
+        "record_date": "07/01/26",
         "record_time": "7pm",
         "operator": "Victor",
         "flow_lps": "12",
@@ -39,7 +39,7 @@ def run_from_json(tmp_path, out, pattern):
 
 
 def test_happy_path(write_json, read_workbook, tmp_path):
-    write_json(payload([row(), row(raw_date="08/01/26", record_time="5am")]),
+    write_json(payload([row(), row(record_date="08/01/26", record_time="5am")]),
                "extraction.json")
     out = tmp_path / "out.xlsx"
     assert run_from_json(tmp_path, out, str(tmp_path / "*.json")) == 0
@@ -50,6 +50,10 @@ def test_happy_path(write_json, read_workbook, tmp_path):
     assert list(df.columns) == ALL_COLS
     assert len(df) == 2
     assert df["source_image"].tolist() == ["extraction.json", "extraction.json"]
+    assert set(df["record_date"]) == {"07/01/26", "08/01/26"}
+    assert {pd.Timestamp(d).date() for d in df["record_date_parsed"]} == {
+        date(2026, 1, 7), date(2026, 1, 8)
+    }
 
 
 def test_source_image_from_json(write_json, read_workbook, tmp_path):
@@ -124,13 +128,15 @@ def test_dedup_keeps_last_within_run(write_json, read_workbook, tmp_path):
 
 def test_sorted_by_date_and_time(write_json, read_workbook, tmp_path):
     write_json(payload([
-        row(raw_date="08/01/26", record_time="7pm"),
-        row(raw_date="07/01/26", record_time="5am"),
+        row(record_date="08/01/26", record_time="7pm"),
+        row(record_date="07/01/26", record_time="5am"),
     ]), "a.json")
     out = tmp_path / "out.xlsx"
     run_from_json(tmp_path, out, str(tmp_path / "a.json"))
     df = read_workbook(str(out))[PLANT_SHEET]
-    assert [pd.Timestamp(d).date() for d in df["record_date"]] == [date(2026, 1, 7), date(2026, 1, 8)]
+    assert [pd.Timestamp(d).date() for d in df["record_date_parsed"]] == [
+        date(2026, 1, 7), date(2026, 1, 8)
+    ]
     assert df["record_time_24h"].tolist() == ["05:00", "19:00"]
 
 
@@ -146,11 +152,11 @@ def test_multiple_globs(write_json, read_workbook, tmp_path):
 
 
 def test_date_carry_down_end_to_end(write_json, read_workbook, tmp_path):
-    write_json(payload([row(), row(raw_date=None, record_time="5am")]), "a.json")
+    write_json(payload([row(), row(record_date=None, record_time="5am")]), "a.json")
     out = tmp_path / "out.xlsx"
     run_from_json(tmp_path, out, str(tmp_path / "a.json"))
     df = read_workbook(str(out))[PLANT_SHEET]
-    assert {pd.Timestamp(d).date() for d in df["record_date"]} == {date(2026, 1, 7)}
+    assert {pd.Timestamp(d).date() for d in df["record_date_parsed"]} == {date(2026, 1, 7)}
 
 
 def test_empty_rows_writes_workbook(write_json, read_workbook, tmp_path):

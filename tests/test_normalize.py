@@ -10,7 +10,7 @@ from logbook_parser.schema import ALL_COLS
 
 def row(**overrides):
     base = {
-        "raw_date": "07/01/26",
+        "record_date": "07/01/26",
         "record_time": "7pm",
         "operator": "Victor",
         "flow_lps": "12",
@@ -139,12 +139,33 @@ def test_keys_and_provenance(plant, sample_raw):
 
 def test_field_types(plant, sample_raw):
     r = normalize_extraction(sample_raw([row()]), plant, "p.jpg")[0]
-    assert r["record_date"] == date(2026, 1, 7)
+    assert r["record_date"] == "07/01/26"
+    assert r["record_date_parsed"] == date(2026, 1, 7)
     assert r["record_time"] == "7pm"
     assert r["record_time_24h"] == "19:00"
     assert isinstance(r["flow_lps"], float)
     assert isinstance(r["turbidity_raw_ntu"], float)
     assert r["operator"] == "Victor"
+
+
+def test_unpadded_written_date_parses(plant, sample_raw):
+    r = normalize_extraction(sample_raw([row(record_date="27/5/24")]), plant, "p.jpg")[0]
+    assert r["record_date"] == "27/5/24"
+    assert r["record_date_parsed"] == date(2024, 5, 27)
+    assert r["needs_review"] is False
+
+
+def test_record_date_preserved_when_unparseable(plant, sample_raw):
+    r = normalize_extraction(sample_raw([row(record_date="not-a-date")]), plant, "p.jpg")[0]
+    assert r["record_date"] == "not-a-date"
+    assert r["record_date_parsed"] is None
+    assert "record_date_parsed(unparsed)" in r["review_notes"]
+
+
+def test_record_date_blank_is_none(plant, sample_raw):
+    r = normalize_extraction(sample_raw([row(record_date="")]), plant, "p.jpg")[0]
+    assert r["record_date"] is None
+    assert r["record_date_parsed"] is None
 
 
 def test_missing_rows_key(plant):
@@ -167,35 +188,32 @@ def test_blank_values_are_none_and_not_flagged(plant, sample_raw):
 
 
 def test_date_carry_down(plant, sample_raw):
-    rows = [row(), row(raw_date=None, record_time="5am")]
+    rows = [row(), row(record_date=None, record_time="5am")]
     out = normalize_extraction(sample_raw(rows), plant, "p.jpg")
-    assert out[0]["record_date"] == date(2026, 1, 7)
-    assert out[1]["record_date"] == date(2026, 1, 7)
+    assert out[0]["record_date_parsed"] == date(2026, 1, 7)
+    assert out[1]["record_date_parsed"] == date(2026, 1, 7)
+    assert out[1]["record_date"] is None
 
 
 def test_date_carry_down_resets_on_new_date(plant, sample_raw):
-    rows = [row(), row(raw_date="08/01/26")]
+    rows = [row(), row(record_date="08/01/26")]
     out = normalize_extraction(sample_raw(rows), plant, "p.jpg")
-    assert out[1]["record_date"] == date(2026, 1, 8)
-
-
-def test_date_from_raw_date_when_record_date_blank(plant, sample_raw):
-    r = normalize_extraction(sample_raw([row(record_date="")]), plant, "p.jpg")[0]
-    assert r["record_date"] == date(2026, 1, 7)
+    assert out[1]["record_date_parsed"] == date(2026, 1, 8)
 
 
 def test_unparsed_date_flagged_and_carried(plant, sample_raw):
-    rows = [row(), row(raw_date="not-a-date")]
+    rows = [row(), row(record_date="not-a-date")]
     out = normalize_extraction(sample_raw(rows), plant, "p.jpg")
-    assert out[1]["record_date"] == date(2026, 1, 7)
-    assert "record_date(unparsed)" in out[1]["review_notes"]
+    assert out[1]["record_date"] == "not-a-date"
+    assert out[1]["record_date_parsed"] == date(2026, 1, 7)
+    assert "record_date_parsed(unparsed)" in out[1]["review_notes"]
     assert out[1]["needs_review"] is True
 
 
 def test_unparsed_date_without_prior_date(plant, sample_raw):
-    r = normalize_extraction(sample_raw([row(raw_date="not-a-date")]), plant, "p.jpg")[0]
-    assert r["record_date"] is None
-    assert "record_date(unparsed)" in r["review_notes"]
+    r = normalize_extraction(sample_raw([row(record_date="not-a-date")]), plant, "p.jpg")[0]
+    assert r["record_date_parsed"] is None
+    assert "record_date_parsed(unparsed)" in r["review_notes"]
 
 
 @pytest.mark.parametrize("value,flagged", [("100", False), ("100.1", True), ("0", False), ("-1", True)])

@@ -83,17 +83,18 @@ def normalize_extraction(raw: Dict, plant: PlantConfig, source_image: str) -> li
             review = []
 
         for fld in FIELD_BY_KEY.values():
-            if fld.key in ("plant", "record_time_24h"):
+            if fld.key in ("plant", "record_time_24h", "record_date_parsed"):
                 continue
             val = r.get(fld.key)
-            if fld.dtype == "date":
-                parsed = parse_date(val if val else r.get("raw_date"), plant.date_format)
-                if parsed is None and (val or r.get("raw_date")):
-                    review.append("record_date(unparsed)")
+            if fld.key == "record_date":
+                out["record_date"] = coerce(val, "str")
+                parsed = parse_date(val, plant.date_format)
+                if parsed is None and val:
+                    review.append("record_date_parsed(unparsed)")
                 parsed = parsed or last_date          # carry down
                 if parsed:
                     last_date = parsed
-                out[fld.key] = parsed
+                out["record_date_parsed"] = parsed
             else:
                 coerced = coerce(val, fld.dtype)
                 out[fld.key] = coerced

@@ -10,7 +10,7 @@ from logbook_parser.schema import ALL_COLS
 
 def raw_row(**overrides):
     base = {
-        "raw_date": "07/01/26",
+        "record_date": "07/01/26",
         "record_time": "7pm",
         "operator": "Victor",
         "flow_lps": "12",
@@ -59,9 +59,9 @@ def make_df(rows):
 def test_merge_dedup_keeps_last():
     existing = make_df([])
     new = [
-        {"source_image": "p.jpg", "record_date": None, "record_time": "7pm",
+        {"source_image": "p.jpg", "record_date_parsed": None, "record_time": "7pm",
          "operator": "Victor", "flow_lps": 12.0},
-        {"source_image": "p.jpg", "record_date": None, "record_time": "7pm",
+        {"source_image": "p.jpg", "record_date_parsed": None, "record_time": "7pm",
          "operator": "Victor", "flow_lps": 99.0},
     ]
     out = merge_rows(existing, new, reprocess=False)
@@ -70,18 +70,18 @@ def test_merge_dedup_keeps_last():
 
 
 def test_merge_retains_disjoint_rows():
-    existing = make_df([{"source_image": "old.jpg", "record_date": None,
+    existing = make_df([{"source_image": "old.jpg", "record_date_parsed": None,
                          "record_time": "7pm", "operator": "Victor"}])
-    new = [{"source_image": "new.jpg", "record_date": None,
+    new = [{"source_image": "new.jpg", "record_date_parsed": None,
             "record_time": "7pm", "operator": "Victor"}]
     out = merge_rows(existing, new, reprocess=False)
     assert set(out["source_image"]) == {"old.jpg", "new.jpg"}
 
 
 def test_merge_reprocess_replaces_source():
-    existing = make_df([{"source_image": "p.jpg", "record_date": None,
+    existing = make_df([{"source_image": "p.jpg", "record_date_parsed": None,
                          "record_time": "7pm", "operator": "Victor", "flow_lps": 12.0}])
-    new = [{"source_image": "p.jpg", "record_date": None,
+    new = [{"source_image": "p.jpg", "record_date_parsed": None,
             "record_time": "7pm", "operator": "Victor", "flow_lps": 42.0}]
     out = merge_rows(existing, new, reprocess=True)
     assert len(out) == 1

@@ -76,6 +76,6 @@ def merge_rows(existing, new, reprocess):
     combined = pd.concat([existing, new_df], ignore_index=True)
     # existing rows come back from Excel as Timestamp while normalize yields
     # datetime.date; unify before dedup/sort so the mixed object column is orderable
-    combined["record_date"] = pd.to_datetime(combined["record_date"], errors="coerce")
+    combined["record_date_parsed"] = pd.to_datetime(combined["record_date_parsed"], errors="coerce")
     return combined.drop_duplicates(
-        subset=["source_image", "record_date", "record_time", "operator"], keep="last")
+        subset=["source_image", "record_date_parsed", "record_time", "operator"], keep="last")

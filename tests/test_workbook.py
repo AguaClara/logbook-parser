@@ -7,6 +7,10 @@ def test_record_time_does_not_match_record_time_24h():
     assert flagged_fields("record_time_24h(unparsed)") == {"record_time_24h"}
 
 
+def test_record_date_does_not_match_record_date_parsed():
+    assert flagged_fields("record_date_parsed(unparsed)") == {"record_date_parsed"}
+
+
 def test_multiple_reasons():
     notes = "turbidity_raw_ntu(out_of_range), record_time_24h(unparsed)"
     assert flagged_fields(notes) == {"turbidity_raw_ntu", "record_time_24h"}

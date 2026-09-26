@@ -91,10 +91,11 @@ logbook_parser/
 
 - **`@dataclass`** for `Field`, `PlantConfig`, `Settings`, `EncodedImage`; no type annotations on `__init__`.
 - **Lazy `openai` import** — inside `OpenAICompatibleProvider._client_instance()` so dry-run mode (`--from-json`) doesn't need it installed.
-- **Date carry-down**: if a row has no date, the last-seen date is carried forward.
+- **Date carry-down**: if a row has no written date, the last-seen parsed date is carried forward.
+- **As-written dates**: `record_date` is the verbatim date the model transcribes (the prompt tells it never to reformat); `record_date_parsed` is the derived `date`, mirroring the as-written `record_time` / derived `record_time_24h` pair. A failed parse flags `record_date_parsed(unparsed)` and `record_date` still preserves the text.
 - **Time normalization**: `to_24h()` handles bare numbers (e.g., `7` → `19:00`), `am`/`pm` suffixes, and HH:MM. `bare_time_rule` configures bare-number behavior ("daytime" assumes 7-11 AM, 12 PM, 1-6 PM).
 - **Excel**: uses `openpyxl` for cell-level formatting (red fill on review cells).
-- **Dedup**: `drop_duplicates(subset=["source_image", "record_date", "record_time", "operator"], keep="last")` in `pipeline.merge_rows()`.
+- **Dedup**: `drop_duplicates(subset=["source_image", "record_date_parsed", "record_time", "operator"], keep="last")` in `pipeline.merge_rows()`.
 
 ## Gotchas & Non-Obvious Details
 
@@ -105,10 +106,10 @@ logbook_parser/
 - **`max_retries`** lives on `Settings` (default 5) and is passed to the provider; there is no `--retries` CLI flag yet.
 - **Only one plant defined** (`san_juan_planes`). Adding one means creating a `PlantConfig` in `plants.py` and registering it in `PLANTS`.
 - **The output file** defaults to `plant.xlsx`, overridable with `--out`; the tool **appends** (reads, merges, dedups, rewrites).
-- **`write_workbook` sorts** by `record_date` then `record_time_24h` before writing.
+- **`write_workbook` sorts** by `record_date_parsed` then `record_time_24h` before writing.
 - **`--from-json` expects** JSON files with a `rows` key. `_source_image` is read from the JSON, not the filename.
 - **`--provider local` requires `--base-url`** and needs no API key.
-- **No test suite**, no CI, no linting config.
+- **Tests**: `pytest` suite under `tests/` (run `uv run pytest`); no CI or linting config yet.
 
 ## Dependencies
 
