@@ -91,7 +91,7 @@ logbook_parser/
 
 - **`@dataclass`** for `Field`, `PlantConfig`, `Settings`, `EncodedImage`; no type annotations on `__init__`.
 - **Lazy `openai` import** — inside `OpenAICompatibleProvider._client_instance()` so dry-run mode (`--from-json`) doesn't need it installed.
-- **Date carry-down**: if a row has no written date, the last-seen parsed date is carried forward.
+- **Date carry-down**: if a row has no written date, the last-seen parsed date is carried forward in `normalize` (not the prompt); `record_date` stays blank so the as-written column is preserved.
 - **As-written dates**: `record_date` is the verbatim date the model transcribes (the prompt tells it never to reformat); `record_date_parsed` is the derived `date`, mirroring the as-written `record_time` / derived `record_time_24h` pair. A failed parse flags `record_date_parsed(unparsed)` and `record_date` still preserves the text.
 - **Time normalization**: `to_24h()` handles bare numbers (e.g., `7` → `19:00`), `am`/`pm` suffixes, and HH:MM. `bare_time_rule` configures bare-number behavior ("daytime" assumes 7-11 AM, 12 PM, 1-6 PM).
 - **Excel**: uses `openpyxl` for cell-level formatting (red fill on review cells).

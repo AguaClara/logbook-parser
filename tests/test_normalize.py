@@ -195,6 +195,14 @@ def test_date_carry_down(plant, sample_raw):
     assert out[1]["record_date"] is None
 
 
+def test_blank_raw_date_stays_none_while_parsed_carries(plant, sample_raw):
+    rows = [row(), row(record_date=None, record_time="5am")]
+    out = normalize_extraction(sample_raw(rows), plant, "p.jpg")
+    assert out[1]["record_date"] is None
+    assert out[1]["record_date_parsed"] == date(2026, 1, 7)
+    assert out[1]["needs_review"] is False
+
+
 def test_date_carry_down_resets_on_new_date(plant, sample_raw):
     rows = [row(), row(record_date="08/01/26")]
     out = normalize_extraction(sample_raw(rows), plant, "p.jpg")

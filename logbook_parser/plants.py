@@ -32,8 +32,8 @@ SAN_JUAN_PLANES = PlantConfig(
         "Filtrada UTN, then the three 'Coagulante' sub-columns (% del deslizador, "
         "Dosis segun % mg/L, Dosis segun probeta mg/L). IGNORE the entire 'Cloro' "
         "section and the rightmost cut-off column. Caudal is almost always 12. "
-        "Dates are DD/MM/YY and often only on the first row of a day -> CARRY THE DATE "
-        "DOWN until it changes. Times mix formats (7pm / 7:00 / 5am). Operators are "
+        "Dates are DD/MM/YY and often only appear on the first row of a day; leave the date "
+        "blank where it is not written. Times mix formats (7pm / 7:00 / 5am). Operators are "
         "usually Victor, Tulio, or Jose. Turbidity values are decimals (41.06, 1.79). "
         "Ignore any bleed-through / partial rows from another page at the edges."
     ),
