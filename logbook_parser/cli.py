@@ -28,6 +28,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--api-key", default=None,
                     help="optional API key for --provider local")
     ap.add_argument("--reprocess", action="store_true", help="re-extract even if already in file")
+    ap.add_argument("--debug-dir", "--debug_dir", dest="debug_dir", default=None,
+                    help="save raw model output to this folder when JSON parsing fails")
     return ap
 
 
@@ -46,6 +48,7 @@ def main(argv=None) -> int:
         reprocess=args.reprocess,
         photos=args.photos,
         from_json=args.from_json,
+        debug_dir=args.debug_dir,
     )
 
     existing = load_existing(args.out, plant.name)

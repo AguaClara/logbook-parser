@@ -30,6 +30,9 @@ uv run logbook-parser --plant san_juan_planes --photos /path/to/photos --model g
 uv run logbook-parser --plant san_juan_planes --photos /path/to/photos \
   --provider local --base-url http://localhost:11434/v1 --model llava
 
+# Save raw model output when a photo's JSON fails to parse
+uv run logbook-parser --plant san_juan_planes --photos /path/to/photos --debug-dir ./debug
+
 # Equivalent module invocation
 uv run python -m logbook_parser --plant san_juan_planes --photos /path/to/photos
 ```
@@ -109,6 +112,7 @@ logbook_parser/
 - **`write_workbook` sorts** by `record_date_parsed` then `record_time_24h` before writing.
 - **`--from-json` expects** JSON files with a `rows` key. `_source_image` is read from the JSON, not the filename.
 - **`--provider local` requires `--base-url`** and needs no API key.
+- **`--debug-dir`** (optional) saves a failed photo's raw model output as `<image>.raw.txt` in that folder; nothing is written when the flag is omitted or parsing succeeds.
 - **Tests**: `pytest` suite under `tests/` (run `uv run pytest`); no CI or linting config yet.
 
 ## Dependencies

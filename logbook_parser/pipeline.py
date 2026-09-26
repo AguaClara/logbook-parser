@@ -25,9 +25,9 @@ def rows_from_json(plant, json_globs):
     return rows
 
 
-def process_photo(path, plant, provider, prompt, model):
+def process_photo(path, plant, provider, prompt, model, debug_dir=None):
     """Extract + normalize one photo. Raises on provider failure."""
-    extracted = extract_photo(path, provider, prompt, model)
+    extracted = extract_photo(path, provider, prompt, model, debug_dir)
     return normalize_extraction(extracted, plant, os.path.basename(path))
 
 
@@ -52,7 +52,8 @@ def rows_from_photos(plant, photos_dir, done, settings, provider):
         name = os.path.basename(img)
         t0 = time.time()
         try:
-            new_rows = process_photo(img, plant, provider, prompt, settings.model)
+            new_rows = process_photo(img, plant, provider, prompt, settings.model,
+                                     settings.debug_dir)
         except Exception as e:  # noqa: BLE001 — keep going on a bad photo
             fail_count += 1
             print(f"[{i}/{total}] {name} FAILED after {time.time() - t0:0.0f}s -> {e}",

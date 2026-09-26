@@ -41,6 +41,9 @@ logbook-parser --plant san_juan_planes --photos ./photos --reprocess
 
 # Dry-run from previously extracted JSON (no API calls)
 logbook-parser --plant san_juan_planes --from-json "extractions/*.json"
+
+# Save raw model output for photos whose JSON fails to parse
+logbook-parser --plant san_juan_planes --photos ./photos --debug-dir ./debug
 ```
 
 ### Local inference

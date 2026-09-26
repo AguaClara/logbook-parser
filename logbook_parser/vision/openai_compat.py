@@ -1,5 +1,8 @@
 """Generic provider for any OpenAI-compatible chat-completions endpoint."""
 
+import json
+import os
+import sys
 import time
 from typing import Optional
 
@@ -57,8 +60,27 @@ class OpenAICompatibleProvider:
         raise ExtractionError(f"failed after {self.max_retries} retries: {last_err}")
 
 
-def extract_json(provider, image: EncodedImage, prompt: str, model: str) -> dict:
+def _save_raw(debug_dir: str, image_path: str, text: str) -> None:
+    """Best-effort dump of unparseable model output for later inspection."""
+    try:
+        os.makedirs(debug_dir, exist_ok=True)
+        dest = os.path.join(debug_dir, os.path.basename(image_path) + ".raw.txt")
+        with open(dest, "w", encoding="utf-8") as f:
+            f.write(text or "")
+        print(f"[debug] raw model output saved to {dest}", file=sys.stderr)
+    except Exception as e:  # noqa: BLE001 — diagnostics must not mask the parse error
+        print(f"[debug] could not save raw output: {e}", file=sys.stderr)
+
+
+def extract_json(provider, image: EncodedImage, prompt: str, model: str,
+                 debug_dir: Optional[str] = None) -> dict:
     """Run a provider and parse its output, tagging the model that produced it."""
-    data = parse_json(provider.complete(image, prompt, model))
+    text = provider.complete(image, prompt, model)
+    try:
+        data = parse_json(text)
+    except json.JSONDecodeError:
+        if debug_dir:
+            _save_raw(debug_dir, image.path, text)
+        raise
     data["_model"] = f"{provider.name}:{model}"
     return data

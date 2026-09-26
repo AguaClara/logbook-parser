@@ -23,3 +23,4 @@ class Settings:
     reprocess: bool = False
     photos: Optional[str] = None
     from_json: Optional[list] = field(default=None)
+    debug_dir: Optional[str] = None

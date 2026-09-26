@@ -4,7 +4,8 @@ import json
 
 import pandas as pd
 
-from logbook_parser.pipeline import merge_rows, rows_from_json
+from logbook_parser.config import Settings
+from logbook_parser.pipeline import merge_rows, rows_from_json, rows_from_photos
 from logbook_parser.schema import ALL_COLS
 
 
@@ -54,6 +55,26 @@ def test_multiple_globs_aggregate(plant, tmp_path):
 
 def make_df(rows):
     return pd.DataFrame(rows, columns=ALL_COLS)
+
+
+class MalformedProvider:
+    name = "stub"
+
+    def complete(self, image, prompt, model):
+        return '{"rows": [{"operator": "Victor" "record_time": "7pm"}]}'
+
+
+def test_rows_from_photos_saves_debug_on_parse_failure(plant, tmp_path):
+    photos = tmp_path / "photos"
+    photos.mkdir()
+    (photos / "a.jpg").write_bytes(b"x")
+    debug = tmp_path / "debug"
+    settings = Settings(plant="san_juan_planes", model="stub-model", debug_dir=str(debug))
+
+    rows = rows_from_photos(plant, str(photos), set(), settings, MalformedProvider())
+
+    assert rows == []
+    assert (debug / "a.jpg.raw.txt").read_text(encoding="utf-8").startswith('{"rows"')
 
 
 def test_merge_dedup_keeps_last():
